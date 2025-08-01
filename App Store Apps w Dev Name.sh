@@ -1,19 +1,21 @@
 #!/bin/bash
 
-echo "Fetching list of Mac App Store apps with developer names..."
+echo "Scanning for Mac App Store apps..."
 
-# Get list of all apps installed via the Mac App Store
-mas list | while read -r line; do
-    app_id=$(echo "$line" | awk '{print $1}')
-    app_name=$(echo "$line" | cut -d' ' -f2- | sed -E 's/ \([0-9.]+\)$//')
+app_dir="/Applications"
+tempfile=$(mktemp)
 
-    # Use the App Store metadata to get developer name
-    app_info=$(mas info "$app_id" 2>/dev/null)
-    developer=$(echo "$app_info" | grep "By " | sed -E 's/^.*By (.+)$/\1/')
-
-    if [[ -n "$developer" ]]; then
-        echo "$app_name — Developer: $developer"
-    else
-        echo "$app_name — Developer: Unknown"
+find "$app_dir" -maxdepth 1 -name "*.app" | while read -r app; do
+    plist="$app/Contents/Info.plist"
+    if [[ -f "$plist" ]]; then
+        # Check if the app has a MAS receipt
+        if [[ -f "$app/Contents/_MASReceipt/receipt" ]]; then
+            app_name=$(defaults read "$plist" CFBundleName 2>/dev/null || basename "$app" .app)
+            dev_name=$(codesign -dvv "$app" 2>&1 | grep "Authority=" | head -1 | sed 's/^.*Authority=//')
+            echo "$app_name — Developer: ${dev_name:-Unknown}" >> "$tempfile"
+        fi
     fi
 done
+
+sort "$tempfile"
+rm "$tempfile"

@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# Get the app name from JAMF parameter 4
+APP_NAME="$4"
+APP_BASE_NAME="${APP_NAME%.app}"
+
+# Get the current logged-in user
+CURRENT_USER=$(stat -f%Su /dev/console)
+DOWNLOADS_DIR="/Users/$CURRENT_USER/Downloads"
+APPLICATIONS_DIR="/Applications"
+APP_PATH="$APPLICATIONS_DIR/$APP_NAME"
+
+# Check if the app is already in /Applications
+if [ ! -d "$APP_PATH" ]; then
+    echo "$APP_NAME not found in /Applications. Searching Downloads..."
+
+    # First, try to move the exact match
+    if [ -d "$DOWNLOADS_DIR/$APP_NAME" ]; then
+        echo "Found exact match: $APP_NAME. Moving to /Applications..."
+        mv "$DOWNLOADS_DIR/$APP_NAME" "$APPLICATIONS_DIR/"
+    else
+        # If exact match not found, look for the first variant
+        VARIANT_APP=$(find "$DOWNLOADS_DIR" -type d -name "$APP_BASE_NAME*.app" ! -name "$APP_NAME" | head -n 1)
+        if [ -n "$VARIANT_APP" ]; then
+            echo "Exact match not found. Moving variant: $(basename "$VARIANT_APP") to /Applications..."
+            mv "$VARIANT_APP" "$APPLICATIONS_DIR/"
+        else
+            echo "No matching app found in Downloads to move."
+        fi
+    fi
+else
+    echo "$APP_NAME already exists in /Applications."
+fi
+
+# Delete all matching apps from Downloads
+echo "Deleting all $APP_BASE_NAME*.app from Downloads..."
+find "$DOWNLOADS_DIR" -type d -name "$APP_BASE_NAME*.app" -exec rm -rf {} +
+
+echo "Script completed."
+exit 0
